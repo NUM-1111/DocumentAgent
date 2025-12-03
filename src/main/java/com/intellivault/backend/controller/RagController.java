@@ -2,14 +2,18 @@ package com.intellivault.backend.controller;
 
 import com.intellivault.backend.service.SearchService;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import static org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvisor.CHAT_MEMORY_CONVERSATION_ID_KEY;
+import static org.springframework.ai.chat.client.advisor.AbstractChatMemoryAdvisor.CHAT_MEMORY_RETRIEVE_SIZE_KEY;
 
 @RestController
 public class RagController {
@@ -17,36 +21,38 @@ public class RagController {
     private final ChatClient chatClient;
     private final SearchService searchService;
 
-    public RagController(ChatClient.Builder chatClientBuilder, SearchService searchService) {
-        this.chatClient = chatClientBuilder.build();
+    // 注入 ChatMemory
+    public RagController(ChatClient.Builder chatClientBuilder,
+                         SearchService searchService,
+                         ChatMemory chatMemory) {
         this.searchService = searchService;
+
+        // [核心改造] 构建带记忆的 ChatClient
+        this.chatClient = chatClientBuilder
+                .defaultSystem("你是一个专业的知识库助手，请根据提供的参考资料回答问题。")
+                // 挂载记忆 Advisor
+                .defaultAdvisors(new MessageChatMemoryAdvisor(chatMemory))
+                .build();
     }
 
     /**
-     * 最终形态的 RAG 接口
-     * 调用链路：用户提问 -> 向量检索 -> 构建提示词 -> 大模型推理 -> 返回答案
+     * 带记忆的 RAG 接口
+     * 请求示例: /chat?query=它有哪些特性？&userId=user_001
      */
     @GetMapping("/chat")
-    public String chat(@RequestParam String query) {
-        // 1. 检索阶段 (Retrieval): 找相关的 3 段话
+    public String chat(@RequestParam String query,
+                       @RequestParam(defaultValue = "default_user") String userId) {
+        // 1. 检索阶段 (Retrieval)
         var relatedDocs = searchService.search(query, 3);
 
-        // 如果没找到相关信息，直接“幻觉”或者拒答（这里选择坦诚拒答）
-        if (relatedDocs.isEmpty()) {
-            return "抱歉，知识库中没有找到相关信息。";
-        }
-
-        // 2. 提示词工程 (Prompt Engineering): 组装上下文
-        String context = relatedDocs.stream()
+        // 组装上下文 String
+        String context = relatedDocs.isEmpty() ? "" : relatedDocs.stream()
                 .map(doc -> doc.getContent())
                 .collect(Collectors.joining("\n---\n"));
 
-        // 定义 RAG 专用提示词模板
-        // 核心指令：基于 Context 回答 Question，不要编造。
+        // 2. 提示词工程 (Prompt Engineering)
+        // 注意：这里我们简化提示词，因为 Advisor 会自动把历史记录塞进 Prompt 里
         String promptText = """
-                你是一个智能知识库助手。请根据以下[参考资料]回答用户的问题。
-                如果参考资料中没有答案，请直接说“我不知道”，不要编造。
-                
                 [参考资料]:
                 {context}
                 
@@ -60,7 +66,14 @@ public class RagController {
                 "question", query
         ));
 
-        // 3. 生成阶段 (Generation): 调用 DeepSeek
-        return chatClient.prompt(prompt).call().content();
+        // 3. 生成阶段 (Generation)
+        return chatClient.prompt(prompt)
+                // 传入会话 ID，区分不同用户/会话
+                .advisors(a -> a
+                        .param(CHAT_MEMORY_CONVERSATION_ID_KEY, userId)
+                        .param(CHAT_MEMORY_RETRIEVE_SIZE_KEY, 10) // 只记最近 10 轮
+                )
+                .call()
+                .content();
     }
 }
