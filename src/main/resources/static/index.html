@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>IntelliVault AI</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+
+        /* 聊天区域 */
+        #chat-box { height: 400px; overflow-y: auto; border: 1px solid #eee; padding: 15px; margin-bottom: 20px; border-radius: 5px; background: #fff; }
+        .message { margin-bottom: 15px; padding: 10px 15px; border-radius: 15px; max-width: 80%; line-height: 1.5; }
+        .user { background: #007bff; color: white; margin-left: auto; text-align: right; }
+        .ai { background: #f1f1f1; color: #333; margin-right: auto; }
+
+        /* 输入区域 */
+        .input-group { display: flex; gap: 10px; }
+        input[type="text"] { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 5px; outline: none; }
+        button { padding: 12px 25px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; transition: background 0.2s; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; }
+
+        /* 上传区域 */
+        .upload-section { margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 10px; }
+        #upload-status { font-size: 0.9em; color: #666; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🦁 IntelliVault <span style="font-size:0.5em; color:#999">Private Knowledge Base</span></h2>
+
+    <div class="upload-section">
+        <input type="file" id="fileInput">
+        <button onclick="uploadFile()">上传文档</button>
+        <span id="upload-status"></span>
+    </div>
+
+    <div id="chat-box">
+        <div class="message ai">你好！我是你的知识库助手，请问有什么可以帮你的？</div>
+    </div>
+
+    <div class="input-group">
+        <input type="text" id="query" placeholder="输入问题..." onkeypress="handleEnter(event)">
+        <button onclick="sendQuery()" id="sendBtn">发送</button>
+    </div>
+</div>
+
+<script>
+    const userId = "user_" + Math.random().toString(36).substr(2, 9); // 随机生成个 ID 模拟多用户
+
+    // 1. 文件上传逻辑
+    async function uploadFile() {
+        const fileInput = document.getElementById('fileInput');
+        if (!fileInput.files[0]) return alert("请选择文件");
+
+        const formData = new FormData();
+        formData.append("file", fileInput.files[0]);
+
+        const status = document.getElementById('upload-status');
+        status.innerText = "上传中...";
+
+        try {
+            const res = await fetch('/api/documents/upload', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            if (res.ok) {
+                status.innerText = "✅ " + data.message;
+                status.style.color = "green";
+            } else {
+                throw new Error(data.message || "上传失败");
+            }
+        } catch (e) {
+            status.innerText = "❌ " + e.message;
+            status.style.color = "red";
+        }
+    }
+
+    // 2. 发送消息逻辑 (流式读取)
+    async function sendQuery() {
+        const input = document.getElementById('query');
+        const btn = document.getElementById('sendBtn');
+        const text = input.value.trim();
+        if (!text) return;
+
+        // UI 更新
+        appendMessage(text, 'user');
+        input.value = '';
+        btn.disabled = true;
+
+        // 创建 AI 消息气泡占位
+        const aiMsgDiv = appendMessage("Thinking...", 'ai');
+        let fullResponse = "";
+
+        try {
+            // 发起流式请求
+            const response = await fetch(`/chat/stream?query=${encodeURIComponent(text)}&userId=${userId}`);
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            aiMsgDiv.innerText = ""; // 清空 Thinking
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                fullResponse += chunk;
+                aiMsgDiv.innerText += chunk; // 打字机效果
+
+                // 滚动到底部
+                const chatBox = document.getElementById('chat-box');
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }
+
+        } catch (e) {
+            aiMsgDiv.innerText += "\n[Error: 连接断开]";
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    function appendMessage(text, type) {
+        const div = document.createElement('div');
+        div.className = `message ${type}`;
+        div.innerText = text;
+        document.getElementById('chat-box').appendChild(div);
+        const chatBox = document.getElementById('chat-box');
+        chatBox.scrollTop = chatBox.scrollHeight;
+        return div;
+    }
+
+    function handleEnter(e) {
+        if (e.key === 'Enter') sendQuery();
+    }
+</script>
+</body>
+</html>
