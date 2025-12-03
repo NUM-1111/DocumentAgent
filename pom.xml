@@ -37,6 +37,21 @@
         </dependency>
 
         <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-tika-document-reader</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.tika</groupId>
+                    <artifactId>tika-parser-ocr-module</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.tika</groupId>
+                    <artifactId>tika-parser-sqlite3-module</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>

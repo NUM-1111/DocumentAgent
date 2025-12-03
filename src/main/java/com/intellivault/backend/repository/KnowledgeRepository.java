@@ -11,4 +11,6 @@ public interface KnowledgeRepository extends MongoRepository<KnowledgeDocument, 
 
     // 基础查询，后续我们会用 MongoTemplate 做复杂的向量查询
     List<KnowledgeDocument> findBySourceFilename(String sourceFilename);
+    // [新增] 用于级联删除
+    void deleteByFileId(String fileId);
 }

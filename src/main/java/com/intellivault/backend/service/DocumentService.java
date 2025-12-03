@@ -25,7 +25,7 @@ public class DocumentService {
         this.knowledgeRepository = knowledgeRepository;
     }
 
-    public void processAndStore(String content, String sourceFilename) {
+    public void processAndStore(String content, String sourceFilename, String fileId) {
         if (!StringUtils.hasText(content)) return;
 
         // 1. 文本切片
@@ -50,6 +50,7 @@ public class DocumentService {
                             .content(chunk.getContent())
                             .embedding(vector)
                             .sourceFilename(sourceFilename)
+                            .fileId(fileId)
                             .metadata(Map.of("chunk_index", splitDocuments.indexOf(chunk)))
                             .build();
                 })
@@ -57,7 +58,13 @@ public class DocumentService {
 
         // 3. 批量入库
         knowledgeRepository.saveAll(knowledgeDocs);
-
         System.out.println("✅ 成功入库 " + knowledgeDocs.size() + " 个片段: " + sourceFilename);
+    }
+
+    // [新增] 级联删除：根据 fileId 删除所有的向量片段
+    public void deleteByFileId(String fileId) {
+        // 这里需要去 Repository 加一个方法，或者用 MongoTemplate
+        // 简单起见，我们先去 KnowledgeRepository 加一个 deleteByFileId
+        knowledgeRepository.deleteByFileId(fileId);
     }
 }
