@@ -5,6 +5,12 @@ spring:
   application:
     name: IntelliVault-Backend
 
+  # [新增] 文件上传配置
+  servlet:
+    multipart:
+      max-file-size: 100MB    # 单个文件最大大小
+      max-request-size: 100MB # 整个请求最大大小
+
   data:
     mongodb:
       uri: mongodb://localhost:27017/intellivault
