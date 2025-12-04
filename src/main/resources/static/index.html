@@ -47,8 +47,11 @@
 </div>
 
 <script>
-    const userId = "user_" + Math.random().toString(36).substr(2, 9); // 随机生成个 ID 模拟多用户
-
+    let userId = localStorage.getItem("intelli_user_id");
+    if (!userId) {
+        userId = "user_" + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem("intelli_user_id", userId);
+    }
     // 1. 文件上传逻辑
     async function uploadFile() {
         const fileInput = document.getElementById('fileInput');
