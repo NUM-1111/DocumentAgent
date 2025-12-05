@@ -28,7 +28,7 @@ class DocumentAgentApplicationTests {
         String content = "IntelliVault 本地向量化引擎测试文本。";
 
         System.out.println("🚀 开始执行文档入库测试...");
-        documentService.processAndStore(content, sourceFilename);
+        documentService.processAndStore(content, sourceFilename,"Test_id_001");
         System.out.println("✅ 测试结束，请检查 MongoDB。");
     }
 
@@ -39,7 +39,7 @@ class DocumentAgentApplicationTests {
     void testSearch() {
         // 1. 确保库里有数据 (先跑一次入库)
         String content = "Spring AI 支持多种大模型，包括 OpenAI, Azure, DeepSeek 等。IntelliVault 是一个基于 Spring AI 的项目。";
-        documentService.processAndStore(content, "search_test_doc.txt");
+        documentService.processAndStore(content, "search_test_doc.txt","test_id_002");
 
         // 2. 模拟搜索
         String query = "IntelliVault 是基于什么框架的？";
@@ -67,6 +67,6 @@ class DocumentAgentApplicationTests {
             """;
 
         // 入库 (注意文件名换一个，避免和之前的混淆)
-        documentService.processAndStore(content, "secret_project_info.txt");
+        documentService.processAndStore(content, "secret_project_info.txt","test_id_003");
     }
 }

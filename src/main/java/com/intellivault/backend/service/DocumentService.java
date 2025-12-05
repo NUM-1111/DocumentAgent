@@ -32,7 +32,7 @@ public class DocumentService {
         var splitter = new TokenTextSplitter();
         List<Document> splitDocuments = splitter.apply(List.of(new Document(content)));
 
-        // 2. 向量化处理 & 实体转换
+        // 2. 向量化处理 & 实体转换(注意这里的paralleSream是个坑点)
         List<KnowledgeDocument> knowledgeDocs = splitDocuments.parallelStream()
                 .map(chunk -> {
                     // [修复点]：接收 float[] 数组
@@ -40,10 +40,14 @@ public class DocumentService {
 
                     // [修复点]：将 float[] 转换为 List<Double>
                     // 使用 IntStream 进行高效转换，或者用普通的 for 循环
-                    List<Double> vector = new ArrayList<>(embeddingArray.length);
-                    for (float f : embeddingArray) {
-                        vector.add((double) f);
-                    }
+                    List<Double> vector = IntStream.range(0,embeddingArray.length)
+                            .mapToDouble(i -> embeddingArray[i])
+                            .boxed()
+                            .toList();
+//                    List<Double> vector = new ArrayList<>(embeddingArray.length);
+//                    for (float f : embeddingArray) {
+//                        vector.add((double) f);
+//                    }
 
                     // 构建实体
                     return KnowledgeDocument.builder()

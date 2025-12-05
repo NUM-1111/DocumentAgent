@@ -5,6 +5,7 @@ import com.intellivault.backend.repository.KnowledgeRepository;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -36,21 +37,44 @@ public class SearchService {
         List<KnowledgeDocument> allDocs = knowledgeRepository.findAll();
 
         // 3. 内存计算相似度并排序
-        return allDocs.stream()
-                .map(doc -> {
-                    // 计算相似度分数
-                    double score = cosineSimilarity(queryVector, doc.getEmbedding());
-                    doc.getMetadata().put("score", score); // 把分数暂存到 metadata 方便查看
-                    return doc;
-                })
-                // 过滤掉完全不相关的 (可选，这里设个阈值 0.5)
-                .filter(doc -> (double) doc.getMetadata().get("score") > 0.1)
-                // 按分数降序排列 (最像的排前面)
-                .sorted(Comparator.comparingDouble((KnowledgeDocument doc) ->
-                        (Double) doc.getMetadata().get("score")).reversed())
-                .peek(doc -> System.out.println("🔍 候选文档得分: " + doc.getMetadata().get("score") + " | 内容: " + doc.getContent().substring(0, Math.min(20, doc.getContent().length())))) // [修改点] 打印日志调试
-                .limit(topK)
-                .collect(Collectors.toList());
+        List<KnowledgeDocument> candidates = new ArrayList<>();
+        for (KnowledgeDocument doc : allDocs) {
+            double score = cosineSimilarity(queryVector, doc.getEmbedding());
+            if (score > 0.1) {
+                // 注意：这里依然有副作用(Side Effect)，但在 MVP 阶段可以容忍
+                doc.getMetadata().put("score", score);
+                candidates.add(doc);
+            }
+        }
+        candidates.sort((a, b) -> {
+            Double score1 = (Double) a.getMetadata().get("score");
+            Double score2 = (Double) b.getMetadata().get("score");
+            // 处理 null 安全（防止 metadata 里没有 score 导致空指针）
+            if (score1 == null) score1 = 0.0;
+            if (score2 == null) score2 = 0.0;
+            return Double.compare(score2, score1);
+        });
+
+        // 4. 截取 TopK (防御性复制，防止 subList 坑)
+        int limit = Math.min(topK, candidates.size());
+        return new ArrayList<>(candidates.subList(0, limit));
+
+        //(Lambda写法)
+//        return allDocs.stream()
+//                .map(doc -> {
+//                    // 计算相似度分数
+//                    double score = cosineSimilarity(queryVector, doc.getEmbedding());
+//                    doc.getMetadata().put("score", score); // 把分数暂存到 metadata 方便查看
+//                    return doc;
+//                })
+//                // 过滤掉完全不相关的 (可选，这里设个阈值 0.5)
+//                .filter(doc -> (double) doc.getMetadata().get("score") > 0.1)
+//                // 按分数降序排列 (最像的排前面)
+//                .sorted(Comparator.comparingDouble((KnowledgeDocument doc) ->
+//                        (Double) doc.getMetadata().get("score")).reversed())
+//                .peek(doc -> System.out.println("🔍 候选文档得分: " + doc.getMetadata().get("score") + " | 内容: " + doc.getContent().substring(0, Math.min(20, doc.getContent().length())))) // [修改点] 打印日志调试
+//                .limit(topK)
+//                .collect(Collectors.toList());
     }
 
     // 辅助工具：float[] 转 List<Double>
